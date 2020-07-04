@@ -130,8 +130,7 @@ public class Kafka {
                     try {
                         log.info("Event {} received at {} from topic {}", record.key(), record.timestamp(), topic);
                         produce.produce(new Event.Pong(Instant.now()), topic);
-                        //give it a thread.wait for, otherwise your local jaeger may not handle processing
-                        //too much data
+                        //give it a thread.sleep so local jaeger can handle processing
                         Thread.sleep(1000);
                     } catch (Exception e) {
                         log.error("Event {} received at {} from topic {}", record.key(), record.timestamp(), topic);
@@ -146,7 +145,6 @@ public class Kafka {
         @EnableKafka
         @Configuration
         @Log4j2
-        @Validated
         static class Config {
 
             @Value("${feazesa.kafka.bootstrapserver}")
@@ -173,8 +171,6 @@ public class Kafka {
             @Bean
             public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory() {
                 final var factory = new ConcurrentKafkaListenerContainerFactory<String, String>();
-                //convert String to Json
-                factory.setMessageConverter(new StringJsonMessageConverter());
                 factory.setConsumerFactory(consumerFactory());
                 factory.getContainerProperties().setIdleEventInterval(10000L);
                 return factory;
