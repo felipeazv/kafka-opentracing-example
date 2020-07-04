@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: ping-pong
+  main:
+    allow-bean-definition-overriding: true
+
+feazesa:
+  kafka:
+    bootstrapserver: kafka:9092
+    topic: ping-pong
+    consumer:
+      groupId: ping-pong-consumer
+      auto-offset-reset: earliest
+
+opentracing:
+  jaeger:
+    log-spans: false
+    enabled: true
+    udp-sender:
+      host: jaeger
