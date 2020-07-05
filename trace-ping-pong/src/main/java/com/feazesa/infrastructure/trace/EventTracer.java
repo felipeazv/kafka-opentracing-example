@@ -24,11 +24,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
 
+import javax.swing.text.html.Option;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static io.opentracing.propagation.Format.Builtin.TEXT_MAP;
 
@@ -88,7 +90,7 @@ public class EventTracer {
     @Component
     @Getter
     public static class KafkaProducerTracer {
-        public Span createSpan(Event event, String topic) {
+        public static Span createSpan(Event event, String topic) {
             // creating basic kafka tracing tags
             final var tags = EventTracer.kafkaTracingTags(topic, Tags.SPAN_KIND_PRODUCER, null);
 
@@ -96,11 +98,19 @@ public class EventTracer {
             final var tracerProperties = new TracerProperties("Ping sent", tags);
             final var span = EventTracer.createSpan(tracerProperties, false);
 
+            // let's create a counter to manage a flag that will be passed as part of the baggageItems,
+            // so we can limit the number of produced events
+            final var counter = Optional.ofNullable(span.getBaggageItem("counter"));
+            final var incrementCounter = counter
+                    .map(s -> new AtomicInteger(Integer.parseInt(s)))
+                    .orElseGet(() -> new AtomicInteger(0));                    ;
+
             //example of adding extra tags
             addTagsFromEvent(span, event);
 
             //example of setting baggage items
             span.setBaggageItem(event.getName(), String.format("sent at %s", event.getTime().toString()));
+            span.setBaggageItem("counter", String.valueOf(incrementCounter.incrementAndGet()));
 
             return span;
         }
@@ -132,7 +142,7 @@ public class EventTracer {
     }
 
     @Component
-    public class KafkaConsumerTracer {
+    public static class KafkaConsumerTracer {
         public <K, V> Span createSpan(ConsumerRecord<K, V> record) {
             // creating tags
             final var tags = kafkaTracingTags(record.topic(), Tags.SPAN_KIND_CONSUMER, null);
@@ -159,7 +169,7 @@ public class EventTracer {
     }
 
     @Configuration
-    class TracerConfiguration {
+    static class TracerConfiguration {
 
         @Bean
         @ConditionalOnProperty(value = "opentracing.jaeger.enabled", havingValue = "false")
@@ -172,7 +182,7 @@ public class EventTracer {
             return new ThreadContextScopeManagerTracerBuilderCustomizer();
         }
 
-        private class ThreadContextScopeManagerTracerBuilderCustomizer implements TracerBuilderCustomizer {
+        private static class ThreadContextScopeManagerTracerBuilderCustomizer implements TracerBuilderCustomizer {
             @Override
             public void customize(JaegerTracer.Builder builder) {
                 builder.withScopeManager(new ThreadContextScopeManager());
@@ -228,6 +238,5 @@ public class EventTracer {
             }
         }
     }
-
 }
 

@@ -34,7 +34,10 @@ import org.springframework.validation.annotation.Validated;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import static com.feazesa.infrastructure.trace.EventTracer.KafkaProducerTracer.createSpan;
 import static com.feazesa.infrastructure.trace.EventTracer.traceError;
 
 @Getter
@@ -87,7 +90,7 @@ public class Kafka {
             @Async
             public void produce(final Event event, final String topic) {
                 final var tracer = GlobalTracer.get();
-                final var span = kafkaProducerTracer.createSpan(event, topic);
+                final var span = createSpan(event, topic);
 
                 try (Scope ignored = tracer.scopeManager().activate(span)) {
                     try {
@@ -129,9 +132,17 @@ public class Kafka {
                 try (Scope ignored = tracer.scopeManager().activate(span)) {
                     try {
                         log.info("Event {} received at {} from topic {}", record.key(), record.timestamp(), topic);
-                        produce.produce(new Event.Pong(Instant.now()), topic);
-                        //give it a thread.sleep so local jaeger can handle processing
-                        Thread.sleep(1000);
+                        //counter set on baggageItems to limit the "ping-pong"
+                        final var counter = new AtomicInteger(Integer.parseInt(span.getBaggageItem("counter")));
+                        final var MAX = 10;
+
+                        if (counter.intValue() < MAX) {
+                            log.info("BaggageItems counter with value {}", counter.intValue());
+                            produce.produce(new Event.Pong(Instant.now()), topic);
+                        } else {
+                            log.info("BaggageItems counter has reached limit of {}", MAX);
+                        }
+
                     } catch (Exception e) {
                         log.error("Event {} received at {} from topic {}", record.key(), record.timestamp(), topic);
                         traceError(span, e);
