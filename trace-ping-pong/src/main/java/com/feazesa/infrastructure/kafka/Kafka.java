@@ -3,6 +3,8 @@ package com.feazesa.infrastructure.kafka;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.feazesa.event.Event;
+import com.feazesa.event.Event.Ping;
+import com.feazesa.event.Event.Pong;
 import com.feazesa.infrastructure.trace.EventTracer;
 import io.opentracing.Scope;
 import io.opentracing.util.GlobalTracer;
@@ -26,7 +28,6 @@ import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.converter.StringJsonMessageConverter;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.stereotype.Component;
@@ -34,7 +35,6 @@ import org.springframework.validation.annotation.Validated;
 
 import java.time.Instant;
 import java.util.HashMap;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.feazesa.infrastructure.trace.EventTracer.KafkaProducerTracer.createSpan;
@@ -122,30 +122,36 @@ public class Kafka {
         private final EventTracer.KafkaConsumerTracer kafkaConsumerTracer;
 
         @KafkaListener(topics = "${feazesa.kafka.topic}")
-        public void consume(ConsumerRecord<String, String> record) {
+        public void consume(ConsumerRecord<String, String> record) throws JsonProcessingException {
             final var topic = record.topic();
             final var eventString = record.value();
             final var tracer = GlobalTracer.get();
             if (eventString != null) {
                 final var span = kafkaConsumerTracer.createSpan(record);
 
-                try (Scope ignored = tracer.scopeManager().activate(span)) {
+                try (final var ignored = tracer.scopeManager().activate(span)) {
                     try {
-                        log.info("Event {} received at {} from topic {}", record.key(), record.timestamp(), topic);
-                        //counter set on baggageItems to limit the "ping-pong"
+                        log.info("Event {} received at {} from topic {}", record.key(), Instant.now(), topic);
+                        // Counter set on baggageItems to limit the "ping-pong"
                         final var counter = new AtomicInteger(Integer.parseInt(span.getBaggageItem("counter")));
-                        final var MAX = 10;
+                        final var MAX = 3;
 
                         if (counter.intValue() < MAX) {
                             log.info("BaggageItems counter with value {}", counter.intValue());
-                            produce.produce(new Event.Pong(Instant.now()), topic);
+                            final var mapper = new ObjectMapper();
+                            final var receivedEvent = mapper.readValue(eventString, Event.class);
+                            final var time = Instant.now().toString();
+                            // If ping is received, then pong is sent, vice-versa
+                            final var sendEvent = receivedEvent.getName().equalsIgnoreCase("ping") ? new Pong(time) : new Ping(time);
+
+                            produce.produce(sendEvent, topic);
                         } else {
                             log.info("BaggageItems counter has reached limit of {}", MAX);
                         }
 
                     } catch (Exception e) {
-                        log.error("Event {} received at {} from topic {}", record.key(), record.timestamp(), topic);
                         traceError(span, e);
+                        e.printStackTrace();
                     }
                 } finally {
                     span.finish();

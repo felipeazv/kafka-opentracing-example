@@ -21,7 +21,7 @@ public class Start {
     @Bean
     CommandLineRunner run(Kafka.KafkaProducer.Produce kafkaProducer, @Value("${feazesa.kafka.topic}") String topic) {
         return args -> {
-            final var ping = new Ping(Instant.now());
+            final var ping = new Ping(Instant.now().toString());
             kafkaProducer.produce(ping, topic);
         };
     }

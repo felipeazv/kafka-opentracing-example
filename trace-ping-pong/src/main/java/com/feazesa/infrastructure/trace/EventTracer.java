@@ -1,5 +1,7 @@
 package com.feazesa.infrastructure.trace;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.feazesa.event.Event;
 import io.jaegertracing.internal.JaegerTracer;
 import io.opentracing.*;
@@ -26,6 +28,7 @@ import org.springframework.stereotype.Component;
 
 import javax.swing.text.html.Option;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -95,7 +98,7 @@ public class EventTracer {
             final var tags = EventTracer.kafkaTracingTags(topic, Tags.SPAN_KIND_PRODUCER, null);
 
             // initializing span
-            final var tracerProperties = new TracerProperties("Ping sent", tags);
+            final var tracerProperties = new TracerProperties(event.getName() + " sent", tags);
             final var span = EventTracer.createSpan(tracerProperties, false);
 
             // let's create a counter to manage a flag that will be passed as part of the baggageItems,
@@ -109,7 +112,7 @@ public class EventTracer {
             addTagsFromEvent(span, event);
 
             //example of setting baggage items
-            span.setBaggageItem(event.getName(), String.format("sent at %s", event.getTime().toString()));
+            span.setBaggageItem(event.getName(), String.format("sent at %s", event.getTime()));
             span.setBaggageItem("counter", String.valueOf(incrementCounter.incrementAndGet()));
 
             return span;
@@ -143,11 +146,15 @@ public class EventTracer {
 
     @Component
     public static class KafkaConsumerTracer {
-        public <K, V> Span createSpan(ConsumerRecord<K, V> record) {
+        public <K, V> Span createSpan(ConsumerRecord<K, V> record) throws JsonProcessingException {
             // creating tags
             final var tags = kafkaTracingTags(record.topic(), Tags.SPAN_KIND_CONSUMER, null);
             // initializing span
-            final var tracerProperties = new TracerProperties("Ping received", tags);
+            final var eventString = (String) record.value();
+            final var mapper = new ObjectMapper();
+            final var receivedEvent = mapper.readValue(eventString, Event.class);
+
+            final var tracerProperties = new TracerProperties(receivedEvent.getName() + " received", tags);
             final var spanBuilder = createSpanBuilder(tracerProperties);
 
             Optional.ofNullable(TracingKafkaUtils.extractSpanContext(record.headers(), GlobalTracer.get()))
