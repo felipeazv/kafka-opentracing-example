@@ -21,7 +21,6 @@ services:
     - 6831:6831/udp
     - 16686:16686
 
-  ### Kafka set up ##
   zookeeper:
     image: 'bitnami/zookeeper:3'
     ports:
@@ -46,6 +45,7 @@ services:
       - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
     depends_on:
       - zookeeper
+
 volumes:
   zookeeper_data:
     driver: local

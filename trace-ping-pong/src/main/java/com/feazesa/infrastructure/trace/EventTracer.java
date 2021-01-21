@@ -37,10 +37,6 @@ import static io.opentracing.propagation.Format.Builtin.TEXT_MAP;
 @Getter
 public class EventTracer {
 
-    public io.opentracing.Tracer Tracer() {
-        return GlobalTracer.get();
-    }
-
     public static Span createSpan(TracerProperties tracerProperties, boolean setTagsAsBaggageItems) {
         final var builder = createSpanBuilder(tracerProperties);
         var span = builder.start();
@@ -65,7 +61,7 @@ public class EventTracer {
 
     public static void addTagsFromEvent(Span span, Event event) {
         span.setTag("kafka.event.name", event.getName());
-        span.setTag("kafka.event.time", event.getTime().toString());
+        span.setTag("kafka.event.time", event.getTime());
     }
 
     public static io.opentracing.Tracer.SpanBuilder createSpanBuilder(TracerProperties tracerProperties) {
@@ -90,14 +86,14 @@ public class EventTracer {
     @Getter
     public static class KafkaProducerTracer {
         public static Span createSpan(Event event, String topic) {
-            // creating basic kafka tracing tags
+            // Creating basic kafka tracing tags
             final var tags = EventTracer.kafkaTracingTags(topic, Tags.SPAN_KIND_PRODUCER, null);
 
-            // initializing span
+            // Initializing span
             final var tracerProperties = new TracerProperties(event.getName() + " sent", tags);
             final var span = EventTracer.createSpan(tracerProperties, false);
 
-            // let's create a counter to manage a flag that will be passed as part of the baggageItems,
+            // Let's create a counter to manage a flag that will be passed as part of the baggageItems,
             // so we can limit the number of produced events
             final var counter = Optional.ofNullable(span.getBaggageItem("counter"));
             final var incrementCounter = counter
@@ -105,10 +101,10 @@ public class EventTracer {
                     .orElseGet(() -> new AtomicInteger(0));
             ;
 
-            //example of adding extra tags
+            // Example of adding extra tags
             addTagsFromEvent(span, event);
 
-            //example of setting baggage items
+            // Example of setting baggage items
             span.setBaggageItem(event.getName(), String.format("sent at %s", event.getTime()));
             span.setBaggageItem("counter", String.valueOf(incrementCounter.incrementAndGet()));
 
@@ -150,8 +146,8 @@ public class EventTracer {
             final var mapper = new ObjectMapper();
             final var receivedEvent = mapper.readValue(eventString, Event.class);
 
-            final var tracerProperties = new TracerProperties(receivedEvent.getName() + " received", tags);
             // Initializing span
+            final var tracerProperties = new TracerProperties(receivedEvent.getName() + " received", tags);
             final var spanBuilder = createSpanBuilder(tracerProperties);
 
             Optional.ofNullable(TracingKafkaUtils.extractSpanContext(record.headers(), GlobalTracer.get()))

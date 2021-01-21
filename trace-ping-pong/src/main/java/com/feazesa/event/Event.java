@@ -6,25 +6,18 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.Instant;
-
 import static com.feazesa.event.Event.Ping;
 import static com.feazesa.event.Event.Pong;
 
-@JsonTypeInfo(
-        use = JsonTypeInfo.Id.NAME,
-        property = "type")
-@JsonSubTypes({
-        @JsonSubTypes.Type(value = Ping.class, name = "ping"),
-        @JsonSubTypes.Type(value = Pong.class, name = "pong")
-})
 @Getter
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
+@JsonSubTypes({@JsonSubTypes.Type(value = Ping.class, name = "ping"), @JsonSubTypes.Type(value = Pong.class, name = "pong")})
 @NoArgsConstructor
 public abstract class Event {
     private String time;
     private String name;
 
-    protected Event(String time, String name) {
+    private Event(String time, String name) {
         this.time = time;
         this.name = name;
     }
