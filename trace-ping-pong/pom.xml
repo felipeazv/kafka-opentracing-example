@@ -51,17 +51,7 @@
         <dependency>
             <groupId>io.opentracing.contrib</groupId>
             <artifactId>opentracing-spring-jaeger-cloud-starter</artifactId>
-            <version>3.1.2</version>
-        </dependency>
-        <dependency>
-            <groupId>nl.talsmasoftware.context</groupId>
-            <artifactId>context-propagation</artifactId>
-            <version>1.0.8</version>
-        </dependency>
-        <dependency>
-            <groupId>nl.talsmasoftware.context</groupId>
-            <artifactId>opentracing-span-propagation</artifactId>
-            <version>1.0.8</version>
+            <version>3.2.2</version>
         </dependency>
     </dependencies>
     <build>

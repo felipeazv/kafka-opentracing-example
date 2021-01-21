@@ -131,7 +131,6 @@ public class Kafka {
 
                 try (final var ignored = tracer.scopeManager().activate(span)) {
                     try {
-                        log.info("Event {} received at {} from topic {}", record.key(), Instant.now(), topic);
                         // Counter set on baggageItems to limit the "ping-pong"
                         final var counter = new AtomicInteger(Integer.parseInt(span.getBaggageItem("counter")));
                         final var MAX = 3;

@@ -3,9 +3,9 @@ package com.feazesa.infrastructure.trace;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.feazesa.event.Event;
-import io.jaegertracing.internal.JaegerTracer;
-import io.opentracing.*;
-import io.opentracing.contrib.java.spring.jaeger.starter.TracerBuilderCustomizer;
+import io.opentracing.References;
+import io.opentracing.Span;
+import io.opentracing.SpanContext;
 import io.opentracing.contrib.kafka.TracingKafkaUtils;
 import io.opentracing.log.Fields;
 import io.opentracing.noop.NoopTracerFactory;
@@ -16,19 +16,15 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import nl.talsmasoftware.context.opentracing.ContextScopeManager;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.logging.log4j.ThreadContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
 
-import javax.swing.text.html.Option;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -106,7 +102,8 @@ public class EventTracer {
             final var counter = Optional.ofNullable(span.getBaggageItem("counter"));
             final var incrementCounter = counter
                     .map(s -> new AtomicInteger(Integer.parseInt(s)))
-                    .orElseGet(() -> new AtomicInteger(0));                    ;
+                    .orElseGet(() -> new AtomicInteger(0));
+            ;
 
             //example of adding extra tags
             addTagsFromEvent(span, event);
@@ -147,14 +144,14 @@ public class EventTracer {
     @Component
     public static class KafkaConsumerTracer {
         public <K, V> Span createSpan(ConsumerRecord<K, V> record) throws JsonProcessingException {
-            // creating tags
+            // Creating tags
             final var tags = kafkaTracingTags(record.topic(), Tags.SPAN_KIND_CONSUMER, null);
-            // initializing span
             final var eventString = (String) record.value();
             final var mapper = new ObjectMapper();
             final var receivedEvent = mapper.readValue(eventString, Event.class);
 
             final var tracerProperties = new TracerProperties(receivedEvent.getName() + " received", tags);
+            // Initializing span
             final var spanBuilder = createSpanBuilder(tracerProperties);
 
             Optional.ofNullable(TracingKafkaUtils.extractSpanContext(record.headers(), GlobalTracer.get()))
@@ -184,66 +181,6 @@ public class EventTracer {
             return NoopTracerFactory.create();
         }
 
-        @Bean
-        public TracerBuilderCustomizer threadContextScopeManager() {
-            return new ThreadContextScopeManagerTracerBuilderCustomizer();
-        }
-
-        private static class ThreadContextScopeManagerTracerBuilderCustomizer implements TracerBuilderCustomizer {
-            @Override
-            public void customize(JaegerTracer.Builder builder) {
-                builder.withScopeManager(new ThreadContextScopeManager());
-            }
-        }
-    }
-
-    static class ThreadContextScopeManager extends ContextScopeManager {
-        @Override
-        public Scope activate(Span span) {
-            return new ScopeWrapper(super.activate(span), span.context());
-        }
-
-        @Deprecated
-        public Scope activate(Span span, boolean finishSpanOnClose) {
-            return new ScopeWrapper(super.activate(span, finishSpanOnClose), span.context());
-        }
-
-        private static class ScopeWrapper implements Scope {
-            private final Scope scope;
-            private final String previousTraceId;
-            private final String previousSpanId;
-
-            ScopeWrapper(Scope scope, SpanContext context) {
-                this.scope = scope;
-                this.previousTraceId = lookup("traceId");
-                this.previousSpanId = lookup("spanId");
-
-                String traceId = context.toTraceId();
-                String spanId = context.toSpanId();
-
-                replace("traceId", traceId);
-                replace("spanId", spanId);
-            }
-
-            @Override
-            public void close() {
-                this.scope.close();
-                replace("traceId", previousTraceId);
-                replace("spanId", previousSpanId);
-            }
-        }
-
-        private static String lookup(String key) {
-            return ThreadContext.get(key);
-        }
-
-        private static void replace(String key, String value) {
-            if (value == null) {
-                ThreadContext.remove(key);
-            } else {
-                ThreadContext.put(key, value);
-            }
-        }
     }
 }
 
